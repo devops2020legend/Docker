@@ -1,0 +1,204 @@
+					                                          Docker 
+
+Topics:
+
+Containers Technology
+Components of Container   
+VM vs Containers
+Docker Install 
+Docker Commands 
+Docker File 
+AWS ECR 
+Ansible for Docker
+
+
+Containers Technology
+
+Isolation in your operating system only, without any third party called a container.  A container is a standard unit of software that packages up code and all its dependencies so the application runs quickly and reliably from one computing environment to another. 
+
+The Components that are used for container or isolation  
+Namespaces: provides process isolation, complete isolation of containers, separate file system.
+There are 6 types of namespaces:
+1. mount ns - for file system.
+2. UTS(Unique time-sharing) ns- which checks for different hostnames of running containers
+3. IPC ns - interprocess communication
+4. Network ns- takes care of different ip allocation to different containers
+5. PID ns - process id isolation
+6. user ns- different username(uid)
+
+EX: unshare -h
+unshare -u bash 
+hostname 
+nsenter -t PID -u 
+
+Ref: http://man7.org/linux/man-pages/man7/namespaces.7.html
+http://man7.org/conf/meetup/understanding-user-namespaces--Google-Munich-Kerrisk-2019-10-25.pdf
+
+CGROUPS cgroups limit the resources in which a process or set of processes can use these resources could be CPU,Memory,Network I/O or access to filesystem while namespace restricts the visibility of the group of processes to the rest of the system.
+
+
+mount -t tmpfs cgroup_root /sys/fs/cgroup
+  mkdir /sys/fs/cgroup/cpuset
+  mount -t cgroup cpuset -ocpuset /sys/fs/cgroup/cpuset
+  cd /sys/fs/cgroup/cpuset
+  mkdir Charlie
+  cd Charlie
+  /bin/echo 2-3 > cpuset.cpus
+  /bin/echo 1 > cpuset.mems
+  /bin/echo $$ > tasks
+  sh
+  # The subshell 'sh' is now running in cgroup Charlie
+  # The next line should display '/Charlie'
+  cat /proc/self/cgroup
+
+In this example, the following sequence of commands will setup a cgroup
+named "Charlie", containing just CPUs 2 and 3, and Memory Node 1,
+and then start a subshell 'sh' in that cgroup:
+
+Ref: https://www.kernel.org/doc/Documentation/cgroup-v1/cgroups.txt
+CHROOT
+Each process/command on Linux and Unix-like system has current working directory called root directory of a process/command. You can change the root directory of a command using chroot command, which ends up changing the root directory for both current running process and its children.
+[/donotprint]A process/command that is run in such a modified environment cannot access files outside the root directory. This modified environment is commonly known as “jailed directory” or “chroot jail”. Only a privileged process and root user can use chroot command. 
+
+Ref: https://www.tecmint.com/restrict-ssh-user-to-directory-using-chrooted-jail/
+
+
+
+
+container vs Vm
+
+
+Docker Install 
+
+$ sudo apt-get update
+
+$ sudo apt-get install \
+    apt-transport-https \
+    ca-certificates \
+    curl \
+    gnupg-agent \
+    software-properties-common
+$ curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+$ sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+sudo apt-get update
+ $ sudo apt-get install docker-ce docker-ce-cli containerd.io
+ 
+Basic Commands:
+https://www.docker.com/sites/default/files/d8/2019-09/docker-cheat-sheet.pdf
+ 
+
+
+
+
+
+
+Docker File:
+Dockerfile is a text document that contains all the commands a user could call on the command line to assemble an image. Each instruction creates one layer .Components 
+FROM the starting point of the image.
+COPY one or many local files or folders from source and adds them to the filesystem of the containers.
+RUN will execute any commands in a new layer on top of the current image and commit the results. The resulting committed image will be used for the next step in the Dockerfile.
+CMD The main purpose of a CMD is to provide defaults when executing a container. These will be executed after the entry point.
+ENV This command used to set the environment variables that are required to run the project. 
+WORKDIR tells Docker that the rest of the commands will be run in the given directory 
+ENTRYPOINT sets the command and parameters that will be executed first when a container is run
+ADD copy from local to container filesystem.If the source is a local tar archive in a recognized compression format, then it is automatically unpacked as a directory into the Docker image.
+If the source is a URL, then it will download and copy the file into the destination within the Docker image. However, Docker discourages using ADD for this purpose.
+EXPOSE command informs the Docker that the container listens on the specified network ports at runtime. You can specify whether the port listens on TCP or UDP, and the default is TCP if the protocol is not specified
+
+
+https://blog.knoldus.com/docker-dockerfile/
+https://docs.docker.com/develop/develop-images/dockerfile_best-practices/ 
+https://kapeli.com/cheat_sheets/Dockerfile.docset/Contents/Resources/Documents/index
+
+
+AWS ECR 
+By default, Docker uses a dockerhub as a registry but it may possible that you have to use AWS ECR for the same.
+(Note: AWS CLI and appropriate access should be there) so  
+
+apt-get  update
+apt-get  install awscli
+Install docker client go to top and install 
+
+aws configure --region ap-southeast-1 
+aws ecr get-login
+docker login –u AWS –p password –e none https://aws_account_id.dkr.ecr.us-east-1.amazonaws.com
+Now you can pull and push Image in ECR Repo 
+https://docs.aws.amazon.com/AmazonECR/latest/userguide/repository-create.html
+Ansible for Docker
+
+
+
+- name: Re-create a redis container
+  docker_container:
+    name: myredis
+    image: redis
+    command: redis-server --appendonly yes
+    state: present
+    recreate: yes
+    exposed_ports:
+      - 6379
+    volumes_from:
+      - mydata
+
+- name: Restart a container
+  docker_container:
+    name: myapplication
+    image: someuser/appimage
+    state: started
+    restart: yes
+    links:
+     - "myredis:aliasedredis"
+    devices:
+     - "/dev/sda:/dev/xvda:rwm"
+    ports:
+     - "8080:9000"
+     - "127.0.0.1:8081:9001/udp"
+    env:
+        SECRET_KEY: "ssssh"
+        # Values which might be parsed as numbers, booleans or other types by the YAML parser need to be quoted
+        BOOLEAN_KEY: "yes"
+
+- name: Container present
+  docker_container:
+    name: mycontainer
+    state: present
+    image: ubuntu:14.04
+    command: sleep infinity
+
+- name: Stop a container
+  docker_container:
+    name: mycontainer
+    state: stopped
+
+- name: Start 4 load-balanced containers
+  docker_container:
+    name: "container{{ item }}"
+    recreate: yes
+    image: someuser/anotherappimage
+    command: sleep 1d
+  with_sequence: count=4
+
+- name: remove container
+  docker_container:
+    name: ohno
+    state: absent
+
+- name: Syslogging output
+  docker_container:
+    name: myservice
+    image: busybox
+    log_driver: syslog
+    log_options:
+      syslog-address: tcp://my-syslog-server:514
+      syslog-facility: daemon
+      # NOTE: in Docker 1.13+ the "syslog-tag" option was renamed to "tag" for
+      # older docker installs, use "syslog-tag" instead
+      tag: myservice
+https://www.digitalocean.com/community/tutorials/how-to-use-ansible-to-install-and-set-up-docker-on-ubuntu-18-04
+
+
+
+
